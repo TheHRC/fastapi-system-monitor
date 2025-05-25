@@ -7,6 +7,11 @@
 
 A modern, modular system monitoring dashboard built with FastAPI that provides real-time and historical visualization of system performance metrics.
 
+# Dashboard Preview
+#### Preview 1
+![Dashboard](preview/dashboard_preview_1.png)
+#### Preview 2
+![Dashboard](preview/dashboard_preview_2.png)
 
 ## ✨ Features
 
