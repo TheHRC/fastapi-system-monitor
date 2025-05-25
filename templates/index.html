@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Performance Monitor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif; /* Using Inter font */
+            background-color: #f8f9fa; /* Light grey background */
+            padding-top: 20px; /* Space from top */
+        }
+        .navbar {
+            border-radius: 0.5rem; /* Rounded corners for navbar */
+            margin-bottom: 2rem; /* Space below navbar */
+        }
+        .card {
+            border-radius: 0.75rem; /* More rounded corners for cards */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Subtle shadow for depth */
+            margin-bottom: 1.5rem; /* Space between cards if stacked vertically */
+        }
+        .card-header {
+            background-color: #0d6efd; /* Bootstrap primary blue */
+            color: white;
+            font-weight: 500; /* Slightly bolder header text */
+            border-top-left-radius: 0.75rem; /* Match card rounding */
+            border-top-right-radius: 0.75rem; /* Match card rounding */
+        }
+        .progress {
+            height: 25px; /* Taller progress bar */
+            border-radius: 0.5rem; /* Rounded corners for progress bar */
+            font-size: 0.9rem; /* Text size inside progress bar */
+        }
+        .progress-bar {
+            border-radius: 0.5rem; /* Rounded corners for progress bar inner part */
+        }
+        .list-group-item {
+            border-radius: 0.3rem; /* Slightly rounded list items */
+        }
+        .footer {
+            text-align: center;
+            padding: 1rem 0;
+            margin-top: 2rem;
+            color: #6c757d; /* Muted text color */
+            font-size: 0.9em;
+            border-top: 1px solid #dee2e6; /* Separator line */
+        }
+        /* Ensure Inter font is loaded if available, otherwise fallback */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mx-auto" style="max-width: 960px;">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                System Monitor
+            </a>
+        </div>
+    </nav>
+
+    <div class="container" style="max-width: 960px;">
+        <header class="text-center mb-4">
+            <h1>Live System Performance</h1>
+            <p class="lead">Real-time CPU and Memory Usage</p>
+            <div id="last-updated" class="small text-muted mt-2">Last updated: Just now</div>
+        </header>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        CPU Usage
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title text-center mb-3">{{ cpu_percent }}%</h5>
+                        <div class="progress">
+                            <div class="progress-bar bg-info" role="progressbar"
+                                 style="width: {{ cpu_percent }}%;"
+                                 aria-valuenow="{{ cpu_percent }}"
+                                 aria-valuemin="0" aria-valuemax="100">
+                                {{ cpu_percent }}%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        Memory Usage
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title text-center mb-3">{{ memory_percent }}% Used</h5>
+                        <div class="progress mb-3">
+                            <div class="progress-bar bg-success" role="progressbar"
+                                 style="width: {{ memory_percent }}%;"
+                                 aria-valuenow="{{ memory_percent }}"
+                                 aria-valuemin="0" aria-valuemax="100">
+                                {{ memory_percent }}%
+                            </div>
+                        </div>
+                        <ul class="list-group list-group-flush rounded">
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                Total Memory:
+                                <span class="badge bg-primary rounded-pill">{{ memory_total_gb }} GB</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                Used Memory:
+                                <span class="badge bg-danger rounded-pill">{{ memory_used_gb }} GB</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                Available Memory:
+                                <span class="badge bg-secondary rounded-pill">{{ memory_available_gb }} GB</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>        <!-- Disk Usage Section -->
+        <div class="card mt-4">
+            <div class="card-header">Disk Usage</div>
+            <div class="card-body">
+                <div id="diskUsage" class="row">
+                    <!-- Will be populated with JavaScript -->
+                    <p class="text-center">Loading disk information...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Network Stats Section -->
+        <div class="card mt-4">
+            <div class="card-header">Network Statistics</div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="card-title">Data Transferred</h5>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Sent:</span>
+                                <span id="bytesSent" class="badge bg-primary rounded-pill">0 MB</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Received:</span>
+                                <span id="bytesRecv" class="badge bg-success rounded-pill">0 MB</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h5 class="card-title">Packets</h5>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Sent:</span>
+                                <span id="packetsSent" class="badge bg-primary rounded-pill">0</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Received:</span>
+                                <span id="packetsRecv" class="badge bg-success rounded-pill">0</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Historical Data Charts -->
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">CPU History (Last Hour)</div>
+                    <div class="card-body">
+                        <canvas id="cpuChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">Memory History (Last Hour)</div>
+                    <div class="card-body">
+                        <canvas id="memoryChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Process Table -->
+        <div class="card mt-4">
+            <div class="card-header">Top Processes</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>Name</th>
+                                <th>User</th>
+                                <th>CPU %</th>
+                                <th>Memory %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="processesTable">
+                            <tr>
+                                <td colspan="5" class="text-center">Loading processes...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Alerts -->
+        <div class="card mt-4">
+            <div class="card-header">Recent Alerts</div>
+            <div class="card-body">
+                <ul id="alertsList" class="list-group">
+                    <li class="list-group-item text-center">No recent alerts</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="alert alert-info mt-4 rounded" role="alert">
+            <h4 class="alert-heading">Note:</h4>
+            <p>This page automatically updates every 5 seconds with live system data from the <code>/api/system-info</code> endpoint.</p>
+            <hr>
+            <p class="mb-0">Historical data is collected every minute and stored in a SQLite database.</p>
+        </div>
+
+        <div class="d-flex justify-content-center mt-4 mb-3">
+            <div class="btn-group" role="group">
+                <button id="pauseBtn" class="btn btn-outline-secondary">Pause Updates</button>
+                <button id="refreshBtn" class="btn btn-outline-primary">Refresh Now</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <span>Powered by FastAPI & Bootstrap</span>
+        </div>
+    </footer>    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Configuration
+        const updateInterval = 5000; // Update every 5 seconds
+        let updateTimer = null;
+        let isPaused = false;
+        
+        // DOM elements
+        const cpuValueElement = document.querySelector('.col-md-6:nth-child(1) .card-title');
+        const cpuProgressBar = document.querySelector('.col-md-6:nth-child(1) .progress-bar');
+        const memValueElement = document.querySelector('.col-md-6:nth-child(2) .card-title');
+        const memProgressBar = document.querySelector('.col-md-6:nth-child(2) .progress-bar');
+        const memTotalElement = document.querySelector('.list-group-item:nth-child(1) .badge');
+        const memUsedElement = document.querySelector('.list-group-item:nth-child(2) .badge');
+        const memAvailableElement = document.querySelector('.list-group-item:nth-child(3) .badge');
+        const lastUpdatedElement = document.getElementById('last-updated');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const refreshBtn = document.getElementById('refreshBtn');
+        
+        // Format the timestamp
+        function formatTimestamp() {
+            const now = new Date();
+            return now.toLocaleTimeString();
+        }
+        
+        // Update UI with new data
+        function updateUI(data) {
+            const cpuPercent = data.cpu_percent.toFixed(1);
+            const memPercent = data.memory_info.percent.toFixed(1);
+            const memTotal = data.memory_info.total_gb.toFixed(2);
+            const memUsed = data.memory_info.used_gb.toFixed(2);
+            const memAvailable = data.memory_info.available_gb.toFixed(2);
+            
+            // Update CPU information
+            cpuValueElement.textContent = `${cpuPercent}%`;
+            cpuProgressBar.style.width = `${cpuPercent}%`;
+            cpuProgressBar.textContent = `${cpuPercent}%`;
+            cpuProgressBar.setAttribute('aria-valuenow', cpuPercent);
+            
+            // Update memory information
+            memValueElement.textContent = `${memPercent}% Used`;
+            memProgressBar.style.width = `${memPercent}%`;
+            memProgressBar.textContent = `${memPercent}%`;
+            memProgressBar.setAttribute('aria-valuenow', memPercent);
+            
+            // Update memory details
+            memTotalElement.textContent = `${memTotal} GB`;
+            memUsedElement.textContent = `${memUsed} GB`;
+            memAvailableElement.textContent = `${memAvailable} GB`;
+            
+            // Update the timestamp
+            lastUpdatedElement.textContent = `Last updated: ${formatTimestamp()}`;
+
+            // Update progress bar colors based on usage
+            updateProgressBarColors(cpuPercent, memPercent);
+        }
+
+        // Update progress bar colors based on usage levels
+        function updateProgressBarColors(cpuPercent, memPercent) {
+            // CPU color coding
+            if (cpuPercent > 80) {
+                cpuProgressBar.className = 'progress-bar bg-danger';
+            } else if (cpuPercent > 60) {
+                cpuProgressBar.className = 'progress-bar bg-warning';
+            } else {
+                cpuProgressBar.className = 'progress-bar bg-info';
+            }
+            
+            // Memory color coding
+            if (memPercent > 80) {
+                memProgressBar.className = 'progress-bar bg-danger';
+            } else if (memPercent > 60) {
+                memProgressBar.className = 'progress-bar bg-warning';
+            } else {
+                memProgressBar.className = 'progress-bar bg-success';
+            }
+        }
+          // Initialize charts
+        let cpuChart = null;
+        let memoryChart = null;
+        
+        function initializeCharts() {
+            const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+            const memCtx = document.getElementById('memoryChart').getContext('2d');
+            
+            // Configuration shared by both charts
+            const chartOptions = {
+                responsive: true,
+                animation: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: {
+                            display: true,
+                            text: 'Percent Usage'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Time'
+                        }
+                    }
+                }
+            };
+            
+            // CPU Chart
+            cpuChart = new Chart(cpuCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'CPU %',
+                        data: [],
+                        borderColor: 'rgb(54, 162, 235)',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: chartOptions
+            });
+            
+            // Memory Chart
+            memoryChart = new Chart(memCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Memory %',
+                        data: [],
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: chartOptions
+            });
+        }
+        
+        // Update disk information
+        function updateDiskInfo(disks) {
+            const diskContainer = document.getElementById('diskUsage');
+            
+            // Clear existing content
+            diskContainer.innerHTML = '';
+            
+            disks.forEach((disk, index) => {
+                const diskCard = document.createElement('div');
+                diskCard.className = 'col-md-6 mb-3';
+                
+                const colorClass = disk.percent > 80 ? 'bg-danger' : 
+                                   disk.percent > 60 ? 'bg-warning' : 'bg-success';
+                
+                diskCard.innerHTML = `
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">${disk.mountpoint}</h5>
+                            <p class="text-muted small">${disk.device}</p>
+                            <div class="progress mb-3">
+                                <div class="progress-bar ${colorClass}" role="progressbar" 
+                                     style="width: ${disk.percent}%;" aria-valuenow="${disk.percent}" 
+                                     aria-valuemin="0" aria-valuemax="100">${disk.percent}%</div>
+                            </div>
+                            <div class="row">
+                                <div class="col-4 text-center">
+                                    <div class="fw-bold">${disk.total_gb} GB</div>
+                                    <div class="small text-muted">Total</div>
+                                </div>
+                                <div class="col-4 text-center">
+                                    <div class="fw-bold">${disk.used_gb} GB</div>
+                                    <div class="small text-muted">Used</div>
+                                </div>
+                                <div class="col-4 text-center">
+                                    <div class="fw-bold">${disk.free_gb} GB</div>
+                                    <div class="small text-muted">Free</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                diskContainer.appendChild(diskCard);
+            });
+        }
+        
+        // Update processes table
+        async function updateProcesses() {
+            try {
+                const response = await fetch('/api/processes');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch processes');
+                }
+                
+                const processes = await response.json();
+                const tbody = document.getElementById('processesTable');
+                
+                // Clear existing rows
+                tbody.innerHTML = '';
+                
+                // Add new process rows
+                processes.forEach(proc => {
+                    const row = document.createElement('tr');
+                    
+                    row.innerHTML = `
+                        <td>${proc.pid}</td>
+                        <td>${proc.name}</td>
+                        <td>${proc.username}</td>
+                        <td>${proc.cpu_percent.toFixed(1)}%</td>
+                        <td>${proc.memory_percent.toFixed(1)}%</td>
+                    `;
+                    
+                    tbody.appendChild(row);
+                });
+                
+            } catch (error) {
+                console.error('Error fetching process information:', error);
+            }
+        }
+        
+        // Update alerts list
+        async function updateAlerts() {
+            try {
+                const response = await fetch('/api/alerts');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch alerts');
+                }
+                
+                const alerts = await response.json();
+                const alertsList = document.getElementById('alertsList');
+                
+                // Clear existing alerts
+                alertsList.innerHTML = '';
+                
+                if (alerts.length === 0) {
+                    alertsList.innerHTML = '<li class="list-group-item text-center">No recent alerts</li>';
+                    return;
+                }
+                
+                // Add new alerts
+                alerts.forEach(alert => {
+                    const alertTime = new Date(alert.timestamp).toLocaleString();
+                    const alertClass = alert.alert_type === 'CPU' ? 'text-danger' : 'text-warning';
+                    
+                    const item = document.createElement('li');
+                    item.className = 'list-group-item';
+                    
+                    item.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="${alertClass}"><strong>${alert.alert_type}:</strong> ${alert.message} (${alert.value}%)</span>
+                            <small class="text-muted">${alertTime}</small>
+                        </div>
+                    `;
+                    
+                    alertsList.appendChild(item);
+                });
+                
+            } catch (error) {
+                console.error('Error fetching alerts:', error);
+            }
+        }
+        
+        // Update historical charts
+        async function updateCharts() {
+            try {
+                // Fetch CPU history
+                const cpuResponse = await fetch('/api/history/cpu');
+                if (cpuResponse.ok) {
+                    const cpuData = await cpuResponse.json();
+                    
+                    if (cpuData.timestamps.length > 0) {
+                        // Format timestamps for display
+                        const formattedLabels = cpuData.timestamps.map(ts => {
+                            return new Date(ts).toLocaleTimeString();
+                        });
+                        
+                        // Update chart
+                        cpuChart.data.labels = formattedLabels;
+                        cpuChart.data.datasets[0].data = cpuData.values;
+                        cpuChart.update();
+                    }
+                }
+                
+                // Fetch Memory history
+                const memResponse = await fetch('/api/history/memory');
+                if (memResponse.ok) {
+                    const memData = await memResponse.json();
+                    
+                    if (memData.timestamps.length > 0) {
+                        // Format timestamps for display
+                        const formattedLabels = memData.timestamps.map(ts => {
+                            return new Date(ts).toLocaleTimeString();
+                        });
+                        
+                        // Update chart
+                        memoryChart.data.labels = formattedLabels;
+                        memoryChart.data.datasets[0].data = memData.values;
+                        memoryChart.update();
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating charts:', error);
+            }
+        }
+        
+        // Fetch data from API
+        async function fetchSystemInfo() {
+            try {
+                const response = await fetch('/api/system-info');
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                const data = await response.json();
+                updateUI(data);
+                
+                // Update network stats
+                document.getElementById('bytesSent').textContent = `${data.network_stats.bytes_sent} MB`;
+                document.getElementById('bytesRecv').textContent = `${data.network_stats.bytes_recv} MB`;
+                document.getElementById('packetsSent').textContent = data.network_stats.packets_sent;
+                document.getElementById('packetsRecv').textContent = data.network_stats.packets_recv;
+                
+                // Update disk info
+                updateDiskInfo(data.disk_info);
+                
+            } catch (error) {
+                console.error('Error fetching system information:', error);
+            }
+        }
+        
+        // Start periodic updates
+        function startUpdates() {
+            fetchSystemInfo(); // Fetch immediately
+            updateProcesses();
+            updateAlerts();
+            updateCharts();
+            
+            // Set up intervals for different update frequencies
+            updateTimer = setInterval(fetchSystemInfo, updateInterval);
+            setInterval(updateProcesses, 10000); // Update processes every 10 seconds
+            setInterval(updateAlerts, 30000);    // Update alerts every 30 seconds
+            setInterval(updateCharts, 60000);    // Update charts every minute
+        }
+        
+        // Toggle pause/resume updates
+        pauseBtn.addEventListener('click', function() {
+            if (isPaused) {
+                startUpdates();
+                isPaused = false;
+                pauseBtn.textContent = 'Pause Updates';
+                pauseBtn.classList.replace('btn-primary', 'btn-outline-secondary');
+            } else {
+                clearInterval(updateTimer);
+                isPaused = true;
+                pauseBtn.textContent = 'Resume Updates';
+                pauseBtn.classList.replace('btn-outline-secondary', 'btn-primary');
+            }
+        });
+        
+        // Manual refresh button
+        refreshBtn.addEventListener('click', function() {
+            fetchSystemInfo();
+            refreshBtn.disabled = true;
+            setTimeout(() => { refreshBtn.disabled = false; }, 1000); // Prevent spam clicking
+        });
+          // Start updates when page loads
+        window.addEventListener('load', () => {
+            initializeCharts();
+            startUpdates();
+        });
+    </script>
+</body>
+</html>
